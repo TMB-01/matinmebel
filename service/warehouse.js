@@ -1,8 +1,22 @@
-const {RawMaterial, Files} = require("../db/modules")
+const {RawMaterial, Files, UsedMaterial, OrderDetail, createdBy, updatedBy} = require("../db/modules")
 const {deleteFileById} = require("./files");
+const {Sequelize, Op} = require("sequelize");
+const {sequelize} = require("../db/db");
 
 const getWarehouse = async (req, res) => {
-    RawMaterial.findAll({order: [["id", "DESC"]], where: {isActive: true}})
+    RawMaterial.findAll({
+        order: [["name", "DESC"], ["id", "DESC"]],
+        include: [{
+            model: UsedMaterial,
+            attributes: ["amount"],
+            include: [{
+                model: OrderDetail,
+                // attributes: ["status"],
+                where: {status: ["CREATED", "STARTED"]}
+            }],
+            // where: {order_detail: {status: ["CREATED", "STARTED"]}}
+        }]
+    })
         .then((r) => {
             res.send(r)
         })
@@ -25,7 +39,7 @@ const addMaterial = async (req, res) => {
     } = body;
     name = name?.label;
     measurement = measurement?.label;
-    currency = currency?.label;
+    currency = typeof currency === "string" ? currency : currency?.label;
     category = category?.label;
 
     const imagesUUIDs = [];
@@ -37,7 +51,7 @@ const addMaterial = async (req, res) => {
             if (uuid) {
                 imagesUUIDs.push(uuid);
             } else if (base64) {
-                const file = await Files.create({base64});
+                const file = await Files.create({base64, ...createdBy(req?.user?.id)});
                 imagesUUIDs.push(file?.id);
             }
         }
@@ -46,7 +60,7 @@ const addMaterial = async (req, res) => {
     const existMaterial = await RawMaterial.findOne({
         where: {
             name,
-            isActive: true,
+            is_active: true,
         }
     })
 
@@ -60,7 +74,8 @@ const addMaterial = async (req, res) => {
                 price,
                 currency,
                 category: existMaterial.category,
-                description
+                description,
+                ...createdBy(req?.user?.id)
             })
             res.send("Saved")
         } else {
@@ -77,7 +92,8 @@ const addMaterial = async (req, res) => {
             price,
             currency,
             category,
-            description
+            description,
+            ...createdBy(req?.user?.id)
         })
         res.send("Saved");
     }
@@ -100,106 +116,118 @@ const editMaterial = async (req, res) => {
     } = body;
     // name = name?.label;
     measurement = measurement?.label;
-    currency = currency?.label;
+    currency = typeof currency === "string" ? currency : currency?.label;
     category = category?.label;
 
-    const imagesUUIDs = [];
-    if (images?.length) {
-        for (let i = 0; i < images.length; i++) {
-            const image = images[i];
-            const base64 = image.base64;
-            const uuid = image.uuid;
-            if (uuid) {
-                imagesUUIDs.push(uuid);
-            } else if (base64) {
-                const file = await Files.create({base64});
-                imagesUUIDs.push(file?.id);
-            }
-        }
-    }
     const findMaterial = await RawMaterial.findByPk(query.id)
 
-    const imagesList = findMaterial?.images?.split(",").filter(f => f);
-    if (imagesList?.length) {
-        imagesList.forEach((imgId) => {
-            if (!imagesUUIDs.includes(imgId)) {
-                deleteFileById(imgId)
-            }
+    const existMaterial = await RawMaterial.findAll({
+        where: {
+            id: {[Op.ne]: query?.id}, name, is_active: true
+        }
+    })
+
+    if (existMaterial?.filter(({
+                                   price: ePrice,
+                                   currency: eCurrency
+                               }) => Number(ePrice) === Number(price) && eCurrency === currency).length) {
+        res.status(400).json({
+            msg: "When name is exist price should be different"
         })
-    }
+    } else {
+        const imagesUUIDs = [];
+        if (images?.length) {
+            for (let i = 0; i < images.length; i++) {
+                const image = images[i];
+                const base64 = image.base64;
+                const uuid = image.uuid;
+                if (uuid) {
+                    imagesUUIDs.push(uuid);
+                } else if (base64) {
+                    const file = await Files.create({base64, ...createdBy(req?.user?.id)});
+                    imagesUUIDs.push(file?.id);
+                }
+            }
+        }
 
-    const existMaterial = await RawMaterial.findAll({where: {name, isActive: true}})
-
-    if (existMaterial.filter(({id}) => id !== query.id).length) {
-        const existSame = existMaterial.filter(({
-                                                    id,
-                                                    name: eName,
-                                                    price: ePrice,
-                                                    currency: eCurrency
-                                                }) => id !== query?.id && Number(ePrice) === Number(price) && eCurrency === currency);
-        if (!existSame.length) {
-            await RawMaterial.update({
-                name,
-                images: imagesUUIDs.join(","),
-                amount,
-                measurement: measurement,
-                price,
-                currency,
-                category,
-                description
-            }, {
-                where: {id: query?.id}
-            })
-            await RawMaterial.update({
-                // name,
-                images: imagesUUIDs.join(","),
-                // amount,
-                measurement: measurement,
-                // price,
-                // currency,
-                category,
-                // description
-            }, {
-                where: {
-                    // id: query?.id,
-                    name
+        const imagesList = findMaterial?.images?.split(",").filter(f => f);
+        if (imagesList?.length) {
+            imagesList.forEach((imgId) => {
+                if (!imagesUUIDs.includes(imgId)) {
+                    deleteFileById(imgId)
                 }
             })
-            res.send("Updated")
-        } else {
-            res.status(400).json({
-                msg: "When name is exist price should be different"
-            })
         }
-    } else {
+
         await RawMaterial.update({
             name,
             images: imagesUUIDs.join(","),
-            amount,
+            // amount,
             measurement,
             price,
             currency,
             category,
-            description
+            description,
+            ...updatedBy(req?.user?.id)
         }, {where: {id: query?.id}})
+        await RawMaterial.update({
+            name,
+            images: imagesUUIDs.join(","),
+            // amount,
+            measurement,
+            // price,
+            // currency,
+            category,
+            // description
+            ...updatedBy(req?.user?.id)
+        }, {
+            where: {
+                // id: query?.id,
+                id: {[Op.ne]: query?.id},
+                name: findMaterial?.name,
+                is_active: true
+            }
+        })
         res.send("Updated");
     }
 }
 
-const deleteMaterial = async (req, res) => {
+const changeMaterialActiveness = async (req, res) => {
     const id = req?.query?.id
     await RawMaterial.update({
-        isActive: false
+        is_active: Sequelize.literal(`NOT is_active`),
+        ...updatedBy(req?.user?.id)
     }, {
         where: {id}
     })
         .then(() => {
-            res.send({msg: "Deleted"})
+            res.send({msg: "Changed"})
         })
-        .catch(() => {
+        .catch((err) => {
             res.status(400).json({msg: "Something went wrong :("})
         })
 
 }
 
-module.exports = {getWarehouse, addMaterial, editMaterial, deleteMaterial}
+const addMaterialAmount = async ({id, amount, updatedBy}) => {
+    return await RawMaterial.update({
+        amount: sequelize.literal(`amount + ${amount}`),
+        updatedBy
+    }, {where: {id}});
+}
+
+const subtractMaterialAmount = async ({id, amount, updatedBy}) => {
+    return await RawMaterial.update({
+        amount: sequelize.literal(`amount - ${amount}`),
+        updatedBy
+    }, {where: {id}});
+}
+
+module.exports = {
+    getWarehouse,
+    addMaterial,
+    editMaterial,
+    changeMaterialActiveness,
+    addMaterialAmount,
+    subtractMaterialAmount
+}

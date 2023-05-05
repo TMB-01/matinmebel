@@ -1,5 +1,16 @@
-const {Goods, RawMaterial, Files, GoodsMaterialAmount, Payment} = require("../db/modules");
-const {paymentType, paymentCategory} = require("../db/payment");
+const {
+    Goods,
+    RawMaterial,
+    Files,
+    GoodsMaterialAmount,
+    Payment,
+    FinAccount,
+    createdBy,
+    updatedBy
+} = require("../db/modules");
+const {paymentType, paymentCategory} = require("../constants/payment");
+const {createPayment} = require("./payment");
+const {addMaterialAmount, subtractMaterialAmount} = require("./warehouse");
 const getGoods = async (req, res) => {
     Goods.findAll({
         order: [
@@ -10,6 +21,33 @@ const getGoods = async (req, res) => {
         include: [
             {
                 model: Payment,
+                include: [{model: FinAccount}]
+            },
+            {
+                model: GoodsMaterialAmount,
+                include: RawMaterial
+            }
+        ]
+    })
+        .then((r) => {
+            res.send(r);
+        })
+        .catch((err) => {
+            res.status(400).json({msg: "Something went wrong", err})
+        })
+}
+
+const getSingleGoods = async (req, res) => {
+    const id = req?.query?.id;
+    Goods.findByPk(id, {
+        order: [
+            [{model: Payment}, 'id', 'DESC'],
+            [{model: GoodsMaterialAmount}, 'id', 'DESC'],
+        ],
+        include: [
+            {
+                model: Payment,
+                include: [{model: FinAccount}]
             },
             {
                 model: GoodsMaterialAmount,
@@ -40,7 +78,8 @@ const addGoods = async (req, res) => {
 
     const goods = await Goods.create({
         provider: payload?.provider?.label,
-        description: payload?.description
+        description: payload?.description,
+        ...createdBy(req?.user?.id)
     })
 
     // amount:3
@@ -56,8 +95,10 @@ const addGoods = async (req, res) => {
         const name = product?.name;
         const amount = product?.amount;
         const price = product?.price;
-        const currency = product?.currency?.label;
+        let currency = product?.currency;
         const images = product?.images;
+
+        currency = typeof currency === "string" ? currency : currency?.label
 
         const nameData = name?.data;
         let materialData = null;
@@ -68,8 +109,10 @@ const addGoods = async (req, res) => {
                 delete nameData.updatedAt;
                 materialData = await RawMaterial.create({
                     ...nameData,
+                    amount:0,
                     price,
                     currency,
+                    ...createdBy(req?.user?.id)
                 })
             } else {
                 materialData = await RawMaterial.findByPk(nameData.id);
@@ -84,7 +127,7 @@ const addGoods = async (req, res) => {
                     if (uuid) {
                         imagesUUIDs.push(uuid);
                     } else if (base64) {
-                        const file = await Files.create({base64});
+                        const file = await Files.create({base64, ...createdBy(req?.user?.id)});
                         imagesUUIDs.push(file?.id);
                     }
                 }
@@ -97,18 +140,18 @@ const addGoods = async (req, res) => {
                 price,
                 currency,
                 category: product?.category?.label,
-                description: product?.description
+                description: product?.description,
+                ...createdBy(req?.user?.id)
             })
         }
-        await RawMaterial.update({
-            amount: materialData?.amount + amount,
-        }, {
-            where: {id: materialData?.id}
-        });
+
+        await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
+
         await GoodsMaterialAmount.create({
             amount,
             rawMaterialId: materialData?.id,
-            goodId: goods?.id
+            goodId: goods?.id,
+            ...createdBy(req?.user?.id)
         })
         // res.send({msg: "Saved"})
     }
@@ -118,12 +161,12 @@ const addGoods = async (req, res) => {
         const [key, value] = payloadEntries[i];
         if (key.startsWith("price__")) {
             const [name, index, currency] = key.split("__");
-            const paymentMethod = payload[`payment_method__${index}__${currency}`].value;
-            await Payment.create({
+            const finAccountId = payload[`fin_account__${index}__${currency}`];
+            await createPayment({
                 type: paymentType.EXPENSE,
-                paymentMethod,
+                finAccountId,
                 amount: value,
-                currency,
+                // currency,
                 category: paymentCategory.GOODS,
                 goodId: goods.id
             })
@@ -139,8 +182,10 @@ const addMaterialToGoods = async (req, res) => {
     const name = product?.name;
     const amount = product?.amount;
     const price = product?.price;
-    const currency = product?.currency?.label;
+    let currency = product?.currency;
     const images = product?.images;
+
+    currency = typeof currency === "string" ? currency : currency?.label;
 
     const nameData = name?.data;
     let materialData = null;
@@ -153,6 +198,7 @@ const addMaterialToGoods = async (req, res) => {
                 ...nameData,
                 price,
                 currency,
+                ...createdBy(req?.user?.id)
             })
         } else {
             materialData = await RawMaterial.findByPk(nameData.id);
@@ -167,7 +213,7 @@ const addMaterialToGoods = async (req, res) => {
                 if (uuid) {
                     imagesUUIDs.push(uuid);
                 } else if (base64) {
-                    const file = await Files.create({base64});
+                    const file = await Files.create({base64, ...createdBy(req?.user?.id)});
                     imagesUUIDs.push(file?.id);
                 }
             }
@@ -180,18 +226,18 @@ const addMaterialToGoods = async (req, res) => {
             price,
             currency,
             category: product?.category?.label,
-            description: product?.description
+            description: product?.description,
+            ...createdBy(req?.user?.id)
         })
     }
-    await RawMaterial.update({
-        amount: materialData?.amount + amount,
-    }, {
-        where: {id: materialData?.id}
-    });
+
+    await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
+
     await GoodsMaterialAmount.create({
         amount,
         rawMaterialId: materialData?.id,
-        goodId: query?.id
+        goodId: query?.id,
+        ...createdBy(req?.user?.id)
     })
     res.send({msg: "Saved"})
 }
@@ -204,8 +250,10 @@ const editMaterialOfGoods = async (req, res) => {
     const name = product?.name;
     const amount = product?.amount;
     const price = product?.price;
-    const currency = product?.currency?.label;
+    let currency = product?.currency;
     const images = product?.images;
+
+    currency = typeof currency === "string" ? currency : currency?.label;
 
     const nameData = name?.data;
     let materialData = null;
@@ -218,6 +266,7 @@ const editMaterialOfGoods = async (req, res) => {
                 ...nameData,
                 price,
                 currency,
+                ...createdBy(req?.user?.id)
             })
         } else {
             materialData = await RawMaterial.findByPk(nameData.id);
@@ -232,7 +281,7 @@ const editMaterialOfGoods = async (req, res) => {
                 if (uuid) {
                     imagesUUIDs.push(uuid);
                 } else if (base64) {
-                    const file = await Files.create({base64});
+                    const file = await Files.create({base64, ...createdBy(req?.user?.id)});
                     imagesUUIDs.push(file?.id);
                 }
             }
@@ -245,32 +294,29 @@ const editMaterialOfGoods = async (req, res) => {
             price,
             currency,
             category: product?.category?.label,
-            description: product?.description
+            description: product?.description,
+            ...createdBy(req?.user?.id)
         })
     }
     const goodsMaterialAmount = await GoodsMaterialAmount.findByPk(id);
-    console.log(goodsMaterialAmount);
+    // console.log(goodsMaterialAmount);
     const rawMaterial = await RawMaterial.findByPk(goodsMaterialAmount.rawMaterialId)
-    console.log(rawMaterial);
+    // console.log(rawMaterial);
 
-    await RawMaterial.update({
-        amount: rawMaterial?.amount - goodsMaterialAmount?.amount,
-    }, {
-        where: {id: goodsMaterialAmount?.rawMaterialId}
-    });
+    await subtractMaterialAmount({
+        id: goodsMaterialAmount?.rawMaterialId,
+        amount: goodsMaterialAmount?.amount, ...updatedBy(req?.user?.id)
+    })
 
     materialData = await RawMaterial.findByPk(materialData?.id)
 
-    await RawMaterial.update({
-        amount: materialData?.amount + amount,
-    }, {
-        where: {id: materialData?.id}
-    });
+    await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
 
     await GoodsMaterialAmount.update({
             amount,
             rawMaterialId: materialData?.id,
             // goodId: query?.id
+            ...updatedBy(req?.user?.id)
         }, {
             where: {id}
         }
@@ -282,7 +328,8 @@ const editProviderOfGoods = async (req, res) => {
     const query = req.query;
     const body = req.body;
     await Goods.update({
-        provider: body?.provider?.label
+        provider: body?.provider?.label,
+        ...updatedBy(req?.user?.id)
     }, {
         where: {id: query?.id}
     })
@@ -292,13 +339,10 @@ const editProviderOfGoods = async (req, res) => {
 const deleteMaterialOfGoods = async (req, res) => {
     const query = req.query;
     const goodsMaterialAmount = await GoodsMaterialAmount.findByPk(query?.id)
-    const rawMaterial = await RawMaterial.findByPk(goodsMaterialAmount?.rawMaterialId);
-    await RawMaterial.update({
-        amount: rawMaterial.amount - goodsMaterialAmount.amount
-    }, {
-        where: {
-            id: goodsMaterialAmount?.rawMaterialId
-        }
+
+    await subtractMaterialAmount({
+        id: goodsMaterialAmount?.rawMaterialId,
+        amount: goodsMaterialAmount.amount, ...updatedBy(req?.user?.id)
     })
     await GoodsMaterialAmount.destroy({where: {id: query?.id}})
     res.send({msg: "Deleted"})
@@ -306,6 +350,7 @@ const deleteMaterialOfGoods = async (req, res) => {
 
 module.exports = {
     getGoods,
+    getSingleGoods,
     getProviders,
     addGoods,
     addMaterialToGoods,
