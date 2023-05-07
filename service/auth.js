@@ -86,7 +86,7 @@ const validateCode = async (req, res) => {
 const authMiddleware = () => async (req, res, next) => {
     const path = req?.path;
     const id = path.startsWith("/files/") ? path.split("/files/")[1] : "";
-    const openPaths = ["/auth/send-code", "/auth/validate-code", `/files/${id}`];
+    const openPaths = ["/auth/send-code", "/auth/validate-code", `/files/${id}`,"/"];
     if (!openPaths.includes(path)) {
         const authorization = req?.headers?.authorization;
         if (!authorization) {
