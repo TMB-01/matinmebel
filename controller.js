@@ -47,8 +47,8 @@ const app = express();
 app.use(express.json({limit: '50mb'}));
 app.use(express.urlencoded({limit: '50mb'}));
 app.use(cors());
-const port = process.env.PORT
-app.use(authMiddleware())
+const port = process.env.PORT;
+app.use(authMiddleware());
 
 
 app.get("/", (req, res) => {

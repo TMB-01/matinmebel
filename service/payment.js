@@ -78,14 +78,15 @@ const addPaymentToOrder = async (req, res) => {
 
 const editPayment = async (req, res) => {
     const query = req.query;
-    const id = query.id;
-    const amount = query.price;
+    const id = query?.id;
+    const amount = query?.price;
+    const category = query?.category;
     // const currency = query.currency;
     const finAccountId = query?.fin_account_id;
     const staffId = query?.staffId;
     const description = query?.description;
     const payment = await Payment.findByPk(id);
-    const type = payment.type;
+    const type = payment?.type;
     if (type === paymentType.INCOME) {
         await subtractMoney({id: finAccountId, amount: payment?.amount, ...updatedBy(req?.user?.id)});
         await addMoney({id: finAccountId, amount, ...updatedBy(req?.user?.id)});
@@ -94,6 +95,7 @@ const editPayment = async (req, res) => {
         await subtractMoney({id: finAccountId, amount, ...updatedBy(req?.user?.id)});
     }
     await Payment.update({
+        category,
         amount,
         // paymentMethod,
         finAccountId,
@@ -110,7 +112,7 @@ const deletePayment = async (req, res) => {
     const payment = await Payment.findByPk(id);
     const type = payment?.type;
     if (type === paymentType.INCOME) {
-        await subtractMoney({id: payment?.finAccountId, amount: payment?.amount,...updatedBy(req?.user?.id)})
+        await subtractMoney({id: payment?.finAccountId, amount: payment?.amount, ...updatedBy(req?.user?.id)})
     } else if (type === paymentType.EXPENSE) {
         await addMoney({id: payment?.finAccountId, amount: payment?.amount, ...updatedBy(req?.user?.id)});
     }
