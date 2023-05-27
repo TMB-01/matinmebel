@@ -1,4 +1,5 @@
 const {Sequelize} = require("sequelize")
+// const {updateAddedAtAfterSync} = require("../service/order");
 // const {Salary} = require("./modules");
 
 
@@ -19,6 +20,9 @@ const startDB = async () => {
                     console.log("Synchronized")
                     resolve("done")
                     // Salary.create();
+                    // setTimeout(async () => {
+                    //     await updateAddedAtAfterSync()
+                    // }, 10000)
                 })
                 .catch((err) => {
                     console.log("this is sync err ", err)

@@ -8,7 +8,7 @@ const {
     addMaterialToGoods,
     editMaterialOfGoods,
     deleteMaterialOfGoods,
-    getProviders, editProviderOfGoods, getSingleGoods
+    getProviders, editProviderOfGoods, getSingleGoods, updateGoodsAddedAt, editAddedAtOfGoods
 } = require("./service/goods");
 const {
     payForGoods,
@@ -16,7 +16,7 @@ const {
     editPayment,
     addPaymentToOrder,
     paySalaryForOrder,
-    getPayments, getPaymentCategory, addPayment, paySalary, getStaffSalary
+    getPayments, getPaymentCategory, addPayment, paySalary, getStaffSalary, editAddedAtOfPayment, updatePaymentsAddedAt
 } = require("./service/payment");
 const {
     addOrder,
@@ -24,7 +24,8 @@ const {
     editOrderDetail,
     addOrderDetail,
     editOrderDetailPrice,
-    editOrderClient, editOrderDescription, editOrderDetailStatus, getSingleOrder, closeOrder
+    editOrderClient, editOrderDescription, editOrderDetailStatus, getSingleOrder, closeOrder, updateAddedAtAfterSync,
+    updateAddedAt, editOrderAddedAt
 } = require("./service/order");
 const {getStaffList, addStaff, editStaff, editStaffActivation, getMe} = require("./service/staff");
 const {getAccounts, addAccount, editAccount, editActivation} = require("./service/finAccount");
@@ -67,6 +68,7 @@ app.post("/warehouse/goods", hasAccess(ADD_GOODS), addGoods);
 app.post("/warehouse/add-material-to-goods", hasAccess(EDIT_GOODS), addMaterialToGoods);
 app.put("/warehouse/edit-material-of-goods", hasAccess(EDIT_GOODS), editMaterialOfGoods);
 app.put("/warehouse/edit-provider-of-goods", hasAccess(EDIT_GOODS), editProviderOfGoods);
+app.put("/warehouse/edit-added-at-of-goods", hasAccess(EDIT_GOODS), editAddedAtOfGoods);
 app.delete("/warehouse/delete-material-of-goods", hasAccess(EDIT_GOODS), deleteMaterialOfGoods);
 
 app.get("/payments", hasAccess(GET_PAYMENTS), getPayments);
@@ -74,6 +76,7 @@ app.post("/payment", hasAccess(ADD_PAYMENTS), addPayment);
 app.post("/payment/goods", hasAccess(PAY_FOR_GOODS), payForGoods);
 app.post("/payment/order", hasAccess(ADD_PAYMENT_TO_ORDER), addPaymentToOrder);
 app.put("/payment", hasAccess(EDIT_PAYMENT), editPayment);
+app.put("/payment/added-at", hasAccess(EDIT_PAYMENT), editAddedAtOfPayment);
 app.delete("/payment", hasAccess(DELETE_PAYMENT), deletePayment);
 app.post("/payment/pay-salary-for-order", hasAccess(PAY_SALARY_FOR_ORDER), paySalaryForOrder)
 app.post("/payment/pay-salary", hasAccess(PAY_SALARY), paySalary);
@@ -98,6 +101,7 @@ app.put("/order/order-detail/price", hasAccess(EDIT_ORDER), editOrderDetailPrice
 app.put("/order/order-detail/status", hasAccess(EDIT_ORDER), editOrderDetailStatus);
 app.put("/order/client", hasAccess(EDIT_ORDER), editOrderClient);
 app.put("/order/description", hasAccess(EDIT_ORDER), editOrderDescription);
+app.put("/order/added-at", hasAccess(EDIT_ORDER), editOrderAddedAt);
 
 app.get("/staff", hasAccess(GET_STAFF_LIST), getStaffList);
 app.get("/staff/me", getMe);
@@ -110,6 +114,15 @@ app.get("/auth/send-code", sendCode);
 app.get("/auth/validate-code", validateCode);
 
 app.get("/files/:id", getFileById);
+
+
+//update
+app.get("/update-added-at", async (req, res) => {
+    await updateAddedAt();
+    await updateGoodsAddedAt();
+    await updatePaymentsAddedAt();
+    res.send("Updated");
+})
 
 const startServer = async () => {
     app.listen(port, () => {

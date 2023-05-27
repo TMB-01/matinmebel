@@ -21,7 +21,7 @@ const getOrders = async (req, res) => {
     const [start, end] = dateRange;
     const orders = await Order.findAll({
         order: [
-            ["id", "DESC"],
+            ["addedAt", "DESC"],
             [{model: OrderDetail}, 'id', 'DESC'],
             // [{model: Payment}, 'id', 'DESC'],
         ],
@@ -45,7 +45,7 @@ const getOrders = async (req, res) => {
             isClosed,
             ...(
                 (start && end) ?
-                    {createdAt: {[Op.gte]: start, [Op.lte]: end,}} :
+                    {addedAt: {[Op.gte]: start, [Op.lte]: end,}} :
                     {}
             )
         }
@@ -79,7 +79,7 @@ const getSingleOrder = async (req, res) => {
 const addOrder = async (req, res) => {
     const order = req.body;
     const orderDetails = order?.orderDetails;
-    const {fullname, phone_number, address, description} = order;
+    const {fullname, phone_number, address, description, addedAt} = order;
 
     const prices = Object.entries(order)
         .filter(([key, value]) => key.startsWith("currency"))
@@ -96,6 +96,7 @@ const addOrder = async (req, res) => {
         phoneNumber: phone_number,
         address: address,
         price: prices,
+        addedAt: addedAt || new Date(Date.now()),
         ...createdBy(req?.user?.id)
     })
     for (let i = 0; i < orderDetails.length; i++) {
@@ -211,7 +212,7 @@ const editOrderDetail = async (req, res) => {
             const used_material = used_materials_list[i];
             const amount = used_material.amount;
             const id = used_material.rawMaterialId;
-            await addMaterialAmount({id, amount,...updatedBy(req?.user?.id)});
+            await addMaterialAmount({id, amount, ...updatedBy(req?.user?.id)});
         }
     }
     await UsedMaterial.destroy({where: {orderDetailId: id}});
@@ -343,6 +344,14 @@ const editOrderDescription = async (req, res) => {
     res.send({msg: "Updated"})
 }
 
+const editOrderAddedAt = async (req, res) => {
+    const id = req?.query?.id;
+    const body = req?.body;
+    const addedAt = body?.addedAt;
+    await Order.update({addedAt}, {where: {id}});
+    res.send({msg: "Updated"});
+}
+
 const nextStep = (status) => {
     const {CREATED, STARTED, FINISHED, INSTALLED, DONE} = orderStatus;
     const statuses = {
@@ -385,6 +394,19 @@ const editOrderDetailStatus = async (req, res) => {
     res.send({msg: "Updated"});
 }
 
+const updateAddedAt = async () => {
+    const orders = await Order.findAll();
+    for (let i = 0; i < orders.length; i++) {
+        const order = orders[i];
+        await Order.update({
+            addedAt: order?.addedAt || order?.createdAt
+        }, {
+            where: {id: order?.id}
+        });
+    }
+}
+
+
 module.exports = {
     getOrders,
     getSingleOrder,
@@ -395,5 +417,7 @@ module.exports = {
     editOrderDetailPrice,
     editOrderClient,
     editOrderDescription,
-    editOrderDetailStatus
+    editOrderDetailStatus,
+    updateAddedAt,
+    editOrderAddedAt
 }

@@ -17,6 +17,10 @@ const by = {
     }
 }
 
+const addedAt = {
+    type: DataTypes.DATE,
+}
+
 const createdBy = (id) => ({
     createdBy: id,
 })
@@ -155,6 +159,7 @@ const Payment = sequelize.define("payment", {
     description: {
         type: DataTypes.STRING,
     },
+    addedAt,
     ...by
 })
 
@@ -190,7 +195,8 @@ const Order = sequelize.define("order_data", {
     closedAt: {
         type: DataTypes.DATE,
     },
-    ...by
+    ...by,
+    addedAt
 })
 
 // Client.hasMany(Order);
@@ -305,6 +311,7 @@ const Goods = sequelize.define("goods", {
     description: {
         type: DataTypes.TEXT,
     },
+    addedAt,
     ...by
 
 })

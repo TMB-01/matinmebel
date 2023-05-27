@@ -1,4 +1,4 @@
-const {Payment, FinAccount, createdBy, updatedBy} = require("../db/modules");
+const {Payment, FinAccount, createdBy, updatedBy, Goods} = require("../db/modules");
 const {paymentType, paymentCategory} = require("../constants/payment");
 const {subtractMoney, addMoney} = require("./finAccount");
 const {Op} = require("sequelize");
@@ -9,9 +9,9 @@ const getPayments = async (req, res) => {
     const [start, end] = dateRange;
     const payments = await Payment.findAll({
         include: [{model: FinAccount}],
-        order: [["id", "DESC"]],
+        order: [["addedAt", "DESC"]],
         where: {
-            createdAt: {[Op.gte]: start, [Op.lte]: end,}
+            addedAt: {[Op.gte]: start, [Op.lte]: end,}
         }
     });
     res.send(payments);
@@ -41,6 +41,7 @@ const payForGoods = async (req, res) => {
                 // currency,
                 category: paymentCategory.GOODS,
                 goodId: query?.id,
+                addedAt: payload?.addedAt || new Date(Date.now()),
                 ...createdBy(req?.user?.id)
             })
         }
@@ -68,6 +69,7 @@ const addPaymentToOrder = async (req, res) => {
                 description,
                 category: paymentCategory.ORDER,
                 paymentForOrderId: query?.id,
+                addedAt: payload?.addedAt || new Date(Date.now()),
                 ...createdBy(req?.user?.id)
             })
 
@@ -85,6 +87,7 @@ const editPayment = async (req, res) => {
     const finAccountId = query?.fin_account_id;
     const staffId = query?.staffId;
     const description = query?.description;
+    const addedAt = query?.addedAt;
     const payment = await Payment.findByPk(id);
     const type = payment?.type;
     if (type === paymentType.INCOME) {
@@ -101,8 +104,16 @@ const editPayment = async (req, res) => {
         finAccountId,
         staffId,
         description,
+        addedAt,
         ...updatedBy(req?.user?.id)
     }, {where: {id}})
+    res.send({msg: "Updated"})
+}
+
+const editAddedAtOfPayment = async (req, res) => {
+    const id = req?.query?.id;
+    const addedAt = req?.body?.addedAt;
+    await Payment.update({addedAt}, {where: {id}})
     res.send({msg: "Updated"})
 }
 
@@ -133,6 +144,7 @@ const paySalaryForOrder = async (req, res) => {
         amount: body?.price,
         // currency: body?.currency?.label,
         finAccountId: body?.fin_account_id,
+        addedAt: body?.addedAt || new Date(Date.now()),
         ...createdBy(req?.user?.id)
     });
 
@@ -153,6 +165,7 @@ const paySalary = async (req, res) => {
 }
 
 const createPayment = async (body) => {
+    body.addedAt = body.addedAt || new Date(Date.now());
     await Payment.create(body);
     if (body?.type === paymentType.EXPENSE) {
         await subtractMoney({id: body?.finAccountId, amount: body?.amount, ...updatedBy(body?.createdBy)})
@@ -188,17 +201,28 @@ const getStaffSalary = async (req, res) => {
     res.send(payments);
 }
 
+const updatePaymentsAddedAt = async () => {
+    const payments = await Payment.findAll();
+    for (let i = 0; i < payments.length; i++) {
+        const payment = payments[i];
+        await Payment.update({
+            addedAt: payment?.addedAt || payment?.createdAt
+        }, {where: {id: payment?.id}})
+    }
+}
+
 module.exports = {
     getPayments,
     addPayment,
     payForGoods,
     addPaymentToOrder,
     editPayment,
+    editAddedAtOfPayment,
     deletePayment,
     paySalaryForOrder,
     paySalary,
     createPayment,
     getPaymentCategory,
-    getStaffSalary
-
+    getStaffSalary,
+    updatePaymentsAddedAt
 }

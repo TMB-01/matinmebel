@@ -14,7 +14,7 @@ const {addMaterialAmount, subtractMaterialAmount} = require("./warehouse");
 const getGoods = async (req, res) => {
     Goods.findAll({
         order: [
-            ["id", "DESC"],
+            ["addedAt", "DESC"],
             [{model: Payment}, 'id', 'DESC'],
             [{model: GoodsMaterialAmount}, 'id', 'DESC'],
         ],
@@ -79,6 +79,7 @@ const addGoods = async (req, res) => {
     const goods = await Goods.create({
         provider: payload?.provider?.label,
         description: payload?.description,
+        addedAt: payload?.addedAt || new Date(Date.now()),
         ...createdBy(req?.user?.id)
     })
 
@@ -109,7 +110,7 @@ const addGoods = async (req, res) => {
                 delete nameData.updatedAt;
                 materialData = await RawMaterial.create({
                     ...nameData,
-                    amount:0,
+                    amount: 0,
                     price,
                     currency,
                     ...createdBy(req?.user?.id)
@@ -145,7 +146,7 @@ const addGoods = async (req, res) => {
             })
         }
 
-        await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
+        await addMaterialAmount({id: materialData?.id, amount, ...updatedBy(req?.user?.id)})
 
         await GoodsMaterialAmount.create({
             amount,
@@ -168,7 +169,8 @@ const addGoods = async (req, res) => {
                 amount: value,
                 // currency,
                 category: paymentCategory.GOODS,
-                goodId: goods.id
+                goodId: goods.id,
+                addedAt: payload?.addedAt || new Date(Date.now()),
             })
         }
     }
@@ -231,7 +233,7 @@ const addMaterialToGoods = async (req, res) => {
         })
     }
 
-    await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
+    await addMaterialAmount({id: materialData?.id, amount, ...updatedBy(req?.user?.id)})
 
     await GoodsMaterialAmount.create({
         amount,
@@ -310,7 +312,7 @@ const editMaterialOfGoods = async (req, res) => {
 
     materialData = await RawMaterial.findByPk(materialData?.id)
 
-    await addMaterialAmount({id: materialData?.id, amount,...updatedBy(req?.user?.id)})
+    await addMaterialAmount({id: materialData?.id, amount, ...updatedBy(req?.user?.id)})
 
     await GoodsMaterialAmount.update({
             amount,
@@ -336,6 +338,13 @@ const editProviderOfGoods = async (req, res) => {
     res.send({msg: "Updated"})
 }
 
+const editAddedAtOfGoods = async (req, res) => {
+    const id = req?.query?.id;
+    const addedAt = req?.body?.addedAt;
+    await Goods.update({addedAt}, {where: {id}})
+    res.send({msg: "Updated"})
+}
+
 const deleteMaterialOfGoods = async (req, res) => {
     const query = req.query;
     const goodsMaterialAmount = await GoodsMaterialAmount.findByPk(query?.id)
@@ -348,6 +357,16 @@ const deleteMaterialOfGoods = async (req, res) => {
     res.send({msg: "Deleted"})
 }
 
+const updateGoodsAddedAt = async () => {
+    const goods = await Goods.findAll();
+    for (let i = 0; i < goods.length; i++) {
+        const singleGoods = goods[i];
+        await Goods.update({
+            addedAt: singleGoods?.addedAt || singleGoods?.createdAt
+        }, {where: {id: singleGoods?.id}})
+    }
+}
+
 module.exports = {
     getGoods,
     getSingleGoods,
@@ -356,5 +375,7 @@ module.exports = {
     addMaterialToGoods,
     editMaterialOfGoods,
     deleteMaterialOfGoods,
-    editProviderOfGoods
+    editProviderOfGoods,
+    editAddedAtOfGoods,
+    updateGoodsAddedAt
 }

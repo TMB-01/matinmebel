@@ -62,11 +62,15 @@ const sendCode = async (req, res) => {
 
 const validateCode = async (req, res) => {
     const query = req.query;
+    if (!Object.keys(query).length) {
+        res.status(403).send(`Please send code that we sent from tg-bot`);
+        return;
+    }
     const staff = await Staff.findOne({where: query});
     if (!staff) {
         await Staff.update({wrong_attempt: sequelize.literal("wrong_attempt + 1")}, {where: {phone_number: query?.phone_number}});
         const updatedStaff = await Staff.findOne({where: {phone_number: query?.phone_number}});
-        const wrong_attempt = updatedStaff.wrong_attempt;
+        const wrong_attempt = updatedStaff?.wrong_attempt;
         if (wrong_attempt >= 5) {
             res.status(403).send(`Code is not same as we sent to you via telegram\nYou used ${wrong_attempt} out of 5 attempt. You reached max attempt so your account is blocked. Please contact to super admin to unblock you account`);
             await Staff.update({
@@ -86,7 +90,7 @@ const validateCode = async (req, res) => {
 const authMiddleware = () => async (req, res, next) => {
     const path = req?.path;
     const id = path.startsWith("/files/") ? path.split("/files/")[1] : "";
-    const openPaths = ["/auth/send-code", "/auth/validate-code", `/files/${id}`,"/"];
+    const openPaths = ["/auth/send-code", "/auth/validate-code", `/files/${id}`, "/", "/update-added-at"];
     if (!openPaths.includes(path)) {
         const authorization = req?.headers?.authorization;
         if (!authorization) {
