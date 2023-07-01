@@ -11,7 +11,7 @@ const getPayments = async (req, res) => {
         include: [{model: FinAccount}],
         order: [["addedAt", "DESC"]],
         where: {
-            addedAt: {[Op.gte]: start, [Op.lte]: end,}
+            addedAt: {[Op.gte]: start, [Op.lte]: end}
         }
     });
     res.send(payments);
@@ -194,8 +194,14 @@ const getPaymentCategory = async (req, res) => {
 
 const getStaffSalary = async (req, res) => {
     const staffId = req?.query?.staffId;
+    const dateRange = req?.query?.dateRange;
+    const [start, end] = dateRange;
     const payments = await Payment.findAll({
-        where: {staffId, category: paymentCategory.SALARY},
+        where: {
+            staffId,
+            category: paymentCategory.SALARY,
+            addedAt: {[Op.gte]: start, [Op.lte]: end}
+        },
         include: [{model: FinAccount}]
     })
     res.send(payments);
