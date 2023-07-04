@@ -37,6 +37,21 @@ const getGoods = async (req, res) => {
         })
 }
 
+const getSearchGoodsList = async (req, res) => {
+    const id = req?.query?.id;
+    const rawMaterial = await RawMaterial.findAll({where: {id}})
+    const goods = await Goods.findAll({
+        // subQuery: false,
+        required: true,
+        include: [{model: GoodsMaterialAmount, required: true, include: [{model: RawMaterial, required: true,}]}],
+        where: {
+            "$goods_material_amounts.raw_material.id$": id
+        }
+        // order: "addedAt DESC"
+    });
+    res.send({rawMaterial, goods})
+}
+
 const getSingleGoods = async (req, res) => {
     const id = req?.query?.id;
     Goods.findByPk(id, {
@@ -369,6 +384,7 @@ const updateGoodsAddedAt = async () => {
 
 module.exports = {
     getGoods,
+    getSearchGoodsList,
     getSingleGoods,
     getProviders,
     addGoods,

@@ -8,7 +8,7 @@ const {
     addMaterialToGoods,
     editMaterialOfGoods,
     deleteMaterialOfGoods,
-    getProviders, editProviderOfGoods, getSingleGoods, updateGoodsAddedAt, editAddedAtOfGoods
+    getProviders, editProviderOfGoods, getSingleGoods, updateGoodsAddedAt, editAddedAtOfGoods, getSearchGoodsList
 } = require("./service/goods");
 const {
     payForGoods,
@@ -62,6 +62,9 @@ app.put("/warehouse/material", hasAccess(EDIT_MATERIAL), editMaterial);
 app.put("/warehouse/material/activeness", hasAccess(EDIT_MATERIAL), changeMaterialActiveness);
 
 app.get("/warehouse/goods", hasAccess(GET_GOODS), getGoods);
+app.get("/warehouse/search-item",
+    // hasAccess(GET_GOODS),
+    getSearchGoodsList);
 app.get("/warehouse/single/goods", hasAccess(GET_GOODS), getSingleGoods);
 app.get("/warehouse/providers", hasAccess(GET_GOODS), getProviders);
 app.post("/warehouse/goods", hasAccess(ADD_GOODS), addGoods);
